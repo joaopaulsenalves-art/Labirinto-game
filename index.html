@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no" />
+<title>Labirinto Cartográfico</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
+
+ :root {
+    --ink: #120c08;
+    --ink-deep: #0a0605;
+    --parchment: #e7d7ab;
+    --parchment-soft: #f0e2bd;
+    --parchment-mid: #c8a86f;
+    --ink-brown: #3b2712;
+    --ember: #f2a13a;
+    --ember-soft: rgba(242,161,58,.4);
+    
+    --rust: #9a3f26;
+    --gold: #d8a83e;
+    --emerald: #4f9a6e;
+    
+    --board-pad: 32px;
+    --max-w: calc(94vw - var(--board-pad));
+    --max-h: 55vh;
+    --cell-size: min(calc(var(--max-w) / var(--cols, 5)), calc(var(--max-h) / var(--rows, 5)), 38px);
+  }
+
+  *{box-sizing:border-box;}
+
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:.001ms !important; animation-iteration-count:1 !important; transition-duration:.001ms !important;}
+  }
+
+  html,body{
+    margin:0; padding:0; min-height:100%;
+    background: radial-gradient(ellipse at 50% 0%, var(--ink-brown) 0%, var(--ink) 55%, var(--ink-deep) 100%);
+    color: var(--parchment);
+    font-family:'Crimson Text', Georgia, serif;
+    overflow-x: hidden;
+  }
+
+  body{
+    display:flex; flex-direction:column; align-items:center;
+    padding: 28px 14px 40px;
+    min-height:100vh;
+  }
+
+  .screen { display: none; width: 100%; flex-direction: column; align-items: center; justify-content: center; }
+  .screen.show { display: flex; animation: fadeIn 0.5s ease; }
+  
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+  .title-large {
+    font-family:'Cinzel', serif; font-weight:700; font-size: clamp(2rem, 8vw, 4rem);
+    letter-spacing: 2px; text-align: center; color: var(--gold);
+    text-shadow: 0 0 25px rgba(216,168,62,.5); margin-bottom: 10px;
+  }
+
+  .watermark{
+    position:absolute; top:14px; right:18px; opacity:.18; width:70px; height:70px; pointer-events:none;
+  }
+
+  header{ text-align:center; max-width:520px; margin-bottom:14px; position: relative; }
+
+  h1{
+    font-family:'Cinzel', serif; font-weight:700; font-size: clamp(1.4rem, 4.5vw, 2.1rem);
+    letter-spacing: 2px; margin: 0 0 6px; color: var(--gold);
+    text-shadow: 0 0 18px rgba(216,168,62,.35);
+  }
+
+  .subtitle{ font-style: italic; font-size: .95rem; color: var(--parchment-mid); margin: 0; line-height:1.45; }
+
+  button{
+    font-family:'Cinzel', serif; letter-spacing: 1px; font-size: .8rem; text-transform: uppercase;
+    cursor:pointer; border: 1px solid var(--gold); background: linear-gradient(180deg, #43301a, #241708);
+    color: var(--parchment-soft); padding: 10px 20px; border-radius: 5px;
+    transition: background .2s ease, transform .15s ease, box-shadow .2s ease;
+  }
+  button:hover{ background: linear-gradient(180deg, #5a3f1e, #2e1e0d); box-shadow: 0 0 14px rgba(216,168,62,.3); }
+  button:active{ transform: scale(.97); }
+  button.secondary{ border-color: #6b4c26; background: linear-gradient(180deg, #241708, #150e07); color: var(--parchment-mid); }
+  
+  .menu-btn { font-size: 1.1rem; padding: 16px 30px; margin: 10px; width: 100%; max-width: 320px; border-width: 2px; }
+
+  .top-bar { display: flex; justify-content: space-between; width: 100%; max-width: 600px; margin-bottom: 10px; }
+  .pause-btn, .sound-toggle-btn { font-size: 0.75rem; padding: 8px 12px; background: transparent; border-color: var(--parchment-mid); }
+
+  .level-banner{
+    display:flex; align-items:center; justify-content:center; gap:10px; margin: 14px 0 4px;
+    font-family:'Cinzel', serif; letter-spacing: 1.5px; font-size: .85rem; color: var(--parchment-mid); text-transform: uppercase;
+  }
+  .level-banner .level-num{ color: var(--ember); font-size: 1.05rem; }
+  .level-dots{ display:flex; gap: 5px; }
+  .level-dots span{ width: 7px; height: 7px; border-radius: 50%; background: #4a3419; border: 1px solid #6b4c26; transition: all .3s ease; }
+  .level-dots span.done{ background: var(--emerald); border-color: var(--emerald); box-shadow: 0 0 6px rgba(79,154,110,.6); }
+  .level-dots span.current{ background: var(--ember); border-color: var(--ember); box-shadow: 0 0 8px rgba(242,161,58,.7); }
+
+  .stats-bar{ display:flex; gap: 10px; flex-wrap:wrap; justify-content:center; margin: 10px 0 14px; }
+  .stat{
+    background: linear-gradient(180deg, #241708, #150e07); border: 1px solid #4a3419; border-radius: 6px;
+    padding: 7px 14px; font-family:'Cinzel', serif; font-size: .72rem; letter-spacing: 1px; text-transform: uppercase;
+    color: var(--parchment-mid); min-width: 96px; text-align:center;
+  }
+  .stat strong{ display:block; font-family:'Crimson Text', serif; font-size: 1.15rem; color: var(--ember); letter-spacing:0; margin-top: 2px; }
+  .stat.warn strong{ color: var(--rust); }
+
+  .board-frame{
+    position: relative; padding: 16px; background: linear-gradient(160deg, #2a1c0e, #17100a);
+    border: 1px solid #543c1e; border-radius: 10px; box-shadow: 0 18px 50px rgba(0,0,0,.55), inset 0 0 40px rgba(0,0,0,.5);
+    max-width: 94vw;
+    overflow: hidden;
+  }
+  .board-frame::before{ content:""; position:absolute; inset: 6px; border: 1px solid rgba(216,168,62,.18); border-radius: 6px; pointer-events:none; }
+
+  .maze-wrap{ position: relative; }
+  .maze-grid{ display:grid; position: relative; background: var(--ink); border-radius: 3px; overflow:hidden; }
+
+  .cell{
+    position:relative; box-sizing:border-box; display:flex; align-items:center; justify-content:center;
+    font-size: calc(var(--cell-size) * .65); transition: background-color .4s ease, box-shadow .4s ease, border-color .4s ease;
+  }
+  .cell.void{ background: var(--ink); }
+  .cell.shadow{ background:#3a2a15; }
+  .cell.lit{ background: radial-gradient(circle at 50% 45%, var(--parchment-soft), var(--parchment) 75%); box-shadow: inset 0 0 14px rgba(58,38,14,.35); }
+
+  .cell.wN{ border-top: 3px solid; } .cell.wS{ border-bottom: 3px solid; } .cell.wE{ border-right: 3px solid; } .cell.wW{ border-left: 3px solid; }
+  .cell.shadow.wN, .cell.shadow.wS, .cell.shadow.wE, .cell.shadow.wW{ border-color: rgba(58,38,14,.55); }
+  .cell.lit.wN, .cell.lit.wS, .cell.lit.wE, .cell.lit.wW{ border-color: var(--ink-brown); }
+
+  .cell .icon{ filter: drop-shadow(0 2px 3px rgba(0,0,0,.5)); line-height:1; }
+  .cell.player .icon{ animation: bob 1.6s ease-in-out infinite; }
+  @keyframes bob{ 0%,100%{ transform: translateY(0) scale(1); } 50%{ transform: translateY(-2px) scale(1.06); } }
+
+  .lantern-glow{
+    position:absolute; width: calc(var(--cell-size) * 4.6); height: calc(var(--cell-size) * 4.6);
+    border-radius: 50%; background: radial-gradient(circle, var(--ember-soft) 0%, rgba(242,161,58,.14) 45%, transparent 72%);
+    transform: translate(-50%,-50%); pointer-events:none; mix-blend-mode: screen; animation: flicker 2.6s ease-in-out infinite; z-index: 3;
+  }
+  @keyframes flicker{ 0%,100%{ opacity: .85; transform: translate(-50%,-50%) scale(1); } 35%{ opacity: 1; transform: translate(-50%,-50%) scale(1.05); } 60%{ opacity: .78; transform: translate(-50%,-50%) scale(.97); } }
+
+  .overlay{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    background: rgba(10,6,4,.86); backdrop-filter: blur(2px); opacity:0; pointer-events:none; transition: opacity .5s ease; z-index: 5; border-radius: 3px;
+  }
+  .overlay.show{ opacity:1; pointer-events:auto; }
+
+  .overlay-card{ text-align:center; padding: 20px 22px; max-width: 88%; }
+  .overlay-card h2{ font-family:'Cinzel', serif; letter-spacing:1.5px; font-size: 1.3rem; margin: 0 0 8px; }
+  .overlay-card.win h2{ color: var(--gold); } .overlay-card.lose h2{ color: var(--rust); } .overlay-card.champion h2{ color: var(--emerald); } .overlay-card.pause h2{ color: var(--parchment); }
+  .overlay-card p{ margin: 4px 0; color: var(--parchment-mid); font-size:.95rem; }
+  .overlay-card .score{ font-family:'Cinzel', serif; font-size: 2rem; color: var(--ember); margin: 8px 0; }
+  .overlay-card .btn-row{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top: 10px; }
+
+  .controls-row{ display:flex; align-items:center; justify-content:center; gap: 22px; margin-top: 18px; flex-wrap:wrap; }
+  .dpad{ display:grid; grid-template-columns: repeat(3, 42px); grid-template-rows: repeat(3, 42px); gap: 4px; }
+  .dpad button.pad{ padding:0; font-size: 1.1rem; display:flex; align-items:center; justify-content:center; border-radius: 6px; }
+  .dpad .up{ grid-column:2; grid-row:1; } .dpad .left{ grid-column:1; grid-row:2; } .dpad .center{ grid-column:2; grid-row:2; background:transparent; border-color: rgba(216,168,62,.25); pointer-events:none; } .dpad .right{ grid-column:3; grid-row:2; } .dpad .down{ grid-column:2; grid-row:3; }
+  .hint{ font-size: .8rem; color: var(--parchment-mid); text-align:center; max-width: 300px; line-height:1.5; font-style:italic; }
+  footer{ margin-top: 22px; }
+
+  .custom-layout { display: flex; flex-wrap: wrap; gap: 20px; width: 100%; max-width: 800px; justify-content: center; margin: 20px 0; }
+  .custom-panel { background: rgba(0,0,0,.4); padding: 20px; border-radius: 10px; border: 1px solid var(--ink-brown); flex: 1; min-width: 280px; }
+  .custom-panel h3 { font-family: 'Cinzel', serif; color: var(--ember); text-align: center; margin-top: 0; }
+  .grid-select { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 10px; }
+  .grid-select.skins { grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); }
+  .btn-select { 
+    background: var(--ink); border: 1px solid var(--ink-brown); color: var(--parchment);
+    padding: 10px; border-radius: 6px; font-family: 'Crimson Text', serif; cursor: pointer; transition: all 0.2s;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; font-size: 0.9rem;
+  }
+  .btn-select:hover { border-color: var(--gold); }
+  .btn-select.active { border-color: var(--emerald); background: var(--ink-deep); box-shadow: 0 0 10px rgba(79,154,110,.4); color: var(--gold); }
+  .skin-icon { font-size: 1.8rem; margin-bottom: 4px; }
+  .color-preview { width: 100%; height: 8px; border-radius: 4px; margin-top: 6px; display: flex; }
+  .color-preview div { flex: 1; }
+
+</style>
+</head>
+<body>
+
+<svg class="watermark" viewBox="0 0 100 100" fill="none" stroke="var(--gold)" stroke-width="1">
+  <circle cx="50" cy="50" r="46"/>
+  <circle cx="50" cy="50" r="3" fill="var(--gold)"/>
+  <line x1="50" y1="4" x2="50" y2="20"/>
+  <line x1="50" y1="80" x2="50" y2="96"/>
+  <line x1="4" y1="50" x2="20" y2="50"/>
+  <line x1="80" y1="50" x2="96" y2="50"/>
+  <polygon points="50,14 54,50 50,86 46,50" fill="var(--gold)" opacity="0.5"/>
+</svg>
+
+<!-- TELA INICIAL -->
+<div id="screenStart" class="screen show">
+  <h1 class="title-large">Labirinto<br>Cartográfico</h1>
+  <p class="subtitle" style="margin-bottom: 30px; font-size: 1.1rem;">A luz é o seu único guia.</p>
+  <button id="btnPlay" class="menu-btn">Jogar</button>
+  <button id="btnCustom" class="menu-btn secondary">Mapas e Personagens</button>
+  <button id="btnEnableAudio" class="menu-btn secondary" style="margin-top: 15px; border-color: var(--emerald); color: var(--emerald);">🔊 Ativar Música de Fundo</button>
+</div>
+
+<!-- TELA DE CUSTOMIZAÇÃO -->
+<div id="screenCustom" class="screen">
+  <h1 style="font-size: 2rem;">Acervo do Explorador</h1>
+  
+  <div class="custom-layout">
+    <div class="custom-panel">
+      <h3>Mapas (15)</h3>
+      <div class="grid-select" id="mapList"></div>
+    </div>
+    <div class="custom-panel">
+      <h3>Personagens (10)</h3>
+      <div class="grid-select skins" id="skinList"></div>
+    </div>
+  </div>
+
+  <button id="btnBackFromCustom" class="menu-btn" style="max-width: 200px;">Voltar</button>
+</div>
+
+<!-- TELA DO JOGO -->
+<div id="screenGame" class="screen">
+  
+  <header>
+    <h1>Labirinto Cartográfico</h1>
+    <p class="subtitle">Um mapa antigo, uma lanterna fraca. Encontre a saída antes que sua luz se apague.</p>
+  </header>
+
+  <div class="top-bar">
+    <button id="btnPause" class="pause-btn">⏸️ Pausar</button>
+    <button id="btnToggleSoundGame" class="sound-toggle-btn">🔊 Música: Ligada</button>
+  </div>
+
+  <div class="level-banner">
+    <span>Fase <span class="level-num" id="levelNum">1</span> de <span id="levelTotal">8</span></span>
+    <div class="level-dots" id="levelDots"></div>
+  </div>
+
+  <div class="stats-bar">
+    <div class="stat" id="statSteps">Luz restante<strong id="stepsVal">--</strong></div>
+    <div class="stat" id="statTime">Tempo<strong id="timeVal">00:00</strong></div>
+    <div class="stat" id="statBest">Melhor pontuação<strong id="bestVal">--</strong></div>
+  </div>
+
+  <div class="board-frame">
+    <div class="maze-wrap">
+      <div class="maze-grid" id="mazeGrid"></div>
+      <div class="lantern-glow" id="lanternGlow"></div>
+
+      <div class="overlay" id="overlay">
+        <div class="overlay-card" id="overlayCard">
+          <h2 id="overlayTitle">—</h2>
+          <p id="overlayLine1"></p>
+          <p id="overlayLine2"></p>
+          <div class="score" id="overlayScore"></div>
+          <div class="btn-row" id="overlayBtnRow">
+            <button id="overlayPrimary">Próxima Fase</button>
+            <button class="secondary" id="overlayRestartRun">Recomeçar Jornada</button>
+            <button class="secondary" id="overlayBackToStart" style="display:none;">Voltar ao Início</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls-row">
+    <div class="dpad" aria-label="Controles de movimento">
+      <button class="pad up" data-dir="N" aria-label="Mover para cima">▲</button>
+      <button class="pad left" data-dir="W" aria-label="Mover para esquerda">◀</button>
+      <button class="pad center" tabindex="-1" id="dpadCenter">🧭</button>
+      <button class="pad right" data-dir="E" aria-label="Mover para direita">▶</button>
+      <button class="pad down" data-dir="S" aria-label="Mover para baixo">▼</button>
+    </div>
+    <p class="hint">Use as setas do teclado (ou WASD) para mover o explorador.<br>Cada passo consome sua luz — encontre a saída ★ antes que ela se esgote.</p>
+  </div>
+</div>
+
+<script>
+(function(){
+
+  // ---------- CONFIGURAÇÃO DE ÁUDIO DE FUNDO ----------
+  // Usando um link de áudio público de exemplo para evitar erro de arquivo não encontrado localmente.
+  // Você pode trocar pelo caminho do seu arquivo se preferir (ex: 'sounds/m.mp3').
+ const musicaFundo = new Audio('m.mp3');
+  musicaFundo.loop = true;
+  musicaFundo.volume = 0.4;
+  let somHabilitado = false;
+
+  function alternarMusica() {
+    if (musicaFundo.paused) {
+      musicaFundo.play().then(() => {
+        somHabilitado = true;
+        atualizarBotoesSom("🔊 Música: Ligada");
+      }).catch(err => {
+        console.log("Erro ao tocar áudio: ", err);
+      });
+    } else {
+      musicaFundo.pause();
+      somHabilitado = false;
+      atualizarBotoesSom("🔇 Música: Desligada");
+    }
+  }
+
+  function atualizarBotoesSom(texto) {
+    const btnGame = document.getElementById('btnToggleSoundGame');
+    if(btnGame) btnGame.textContent = texto;
+    const btnStart = document.getElementById('btnEnableAudio');
+    if(btnStart) btnStart.textContent = somHabilitado ? "🔊 Música Ligada" : "🔊 Ativar Música de Fundo";
+  }
+
+  document.getElementById('btnEnableAudio').addEventListener('click', alternarMusica);
+  document.getElementById('btnToggleSoundGame').addEventListener('click', alternarMusica);
+
+  // Tentar tocar automaticamente no primeiro clique geral se o usuário esquecer do botão
+  function liberarAudioPrimeiroClique() {
+    if (!somHabilitado && musicaFundo.paused) {
+      musicaFundo.play().then(() => {
+        somHabilitado = true;
+        atualizarBotoesSom("🔊 Música: Ligada");
+        window.removeEventListener('click', liberarAudioPrimeiroClique);
+        window.removeEventListener('keydown', liberarAudioPrimeiroClique);
+      }).catch(() => {});
+    }
+  }
+  window.addEventListener('click', liberarAudioPrimeiroClique);
+  window.addEventListener('keydown', liberarAudioPrimeiroClique);
+
+  // ---------- CUSTOMIZAÇÃO (MAPAS E SKINS) ----------
+  const THEMES = [
+    { name: 'Cartográfico', colors: { '--ink': '#120c08', '--parchment': '#e7d7ab', '--parchment-soft': '#f0e2bd', '--ember': '#f2a13a', '--ink-brown': '#3b2712' } },
+    { name: 'Aquático', colors: { '--ink': '#041524', '--parchment': '#88d4d8', '--parchment-soft': '#bce6e8', '--ember': '#00a8cc', '--ink-brown': '#0a3052' } },
+    { name: 'Vulcânico', colors: { '--ink': '#1a0505', '--parchment': '#ff8a5c', '--parchment-soft': '#ffc2b3', '--ember': '#f54242', '--ink-brown': '#4a1111' } },
+    { name: 'Floresta Densa', colors: { '--ink': '#0c1a10', '--parchment': '#a3c9a8', '--parchment-soft': '#c9dfcb', '--ember': '#439946', '--ink-brown': '#1b3b24' } },
+    { name: 'Noturno', colors: { '--ink': '#090a14', '--parchment': '#b0b5e6', '--parchment-soft': '#d4d6f0', '--ember': '#6e7ce0', '--ink-brown': '#161938' } },
+    { name: 'Deserto Árido', colors: { '--ink': '#261b11', '--parchment': '#e6b885', '--parchment-soft': '#f0d3b3', '--ember': '#d47f31', '--ink-brown': '#52371e' } },
+    { name: 'Glacial', colors: { '--ink': '#e6f2f5', '--parchment': '#3d6c82', '--parchment-soft': '#779eaf', '--ember': '#214e66', '--ink-brown': '#a8cddb' } },
+    { name: 'Tóxico', colors: { '--ink': '#101711', '--parchment': '#8bff7d', '--parchment-soft': '#c6ffc2', '--ember': '#46eb31', '--ink-brown': '#1a331c' } },
+    { name: 'Cyberpunk', colors: { '--ink': '#12021a', '--parchment': '#ff007f', '--parchment-soft': '#ff66b2', '--ember': '#00f0ff', '--ink-brown': '#3d0a52' } },
+    { name: 'Outono', colors: { '--ink': '#2b1007', '--parchment': '#ff9d00', '--parchment-soft': '#ffc366', '--ember': '#e64500', '--ink-brown': '#5c220f' } },
+    { name: 'Ruínas', colors: { '--ink': '#1f2422', '--parchment': '#99a89c', '--parchment-soft': '#c4ccc6', '--ember': '#d65151', '--ink-brown': '#394540' } },
+    { name: 'Sangrento', colors: { '--ink': '#0d0000', '--parchment': '#d11124', '--parchment-soft': '#e85f6d', '--ember': '#ffb700', '--ink-brown': '#3b0005' } },
+    { name: 'Ametista', colors: { '--ink': '#140621', '--parchment': '#d287ff', '--parchment-soft': '#e6bcff', '--ember': '#a32df2', '--ink-brown': '#351257' } },
+    { name: 'Ouro Real', colors: { '--ink': '#171404', '--parchment': '#ffd700', '--parchment-soft': '#ffe55c', '--ember': '#ffffff', '--ink-brown': '#473f0c' } },
+    { name: 'Matrix', colors: { '--ink': '#000000', '--parchment': '#00ff00', '--parchment-soft': '#66ff66', '--ember': '#00cc00', '--ink-brown': '#003300' } }
+  ];
+
+  const SKINS = [
+    { name: 'Bússola', icon: '🧭' },
+    { name: 'Louco por Bike', icon: '🚲' }, 
+    { name: 'Piloto de Fuga', icon: '🏍️' },
+    { name: 'Cobrinha', icon: '🐍' },
+    { name: 'Desenvolvedor', icon: '👨‍💻' },
+    { name: 'Raposa', icon: '🦊' },
+    { name: 'OVNI', icon: '🛸' },
+    { name: 'Fantasma', icon: '👻' },
+    { name: 'Olho', icon: '👁️' },
+    { name: 'Morcego', icon: '🦇' }
+  ];
+
+  let currentThemeIndex = 0;
+  let currentSkinIndex = 0;
+
+  function initCustomization() {
+    const mapList = document.getElementById('mapList');
+    const skinList = document.getElementById('skinList');
+
+    THEMES.forEach((theme, index) => {
+      const btn = document.createElement('button');
+      btn.className = `btn-select ${index === currentThemeIndex ? 'active' : ''}`;
+      
+      const cPreview = document.createElement('div');
+      cPreview.className = 'color-preview';
+      cPreview.innerHTML = `
+        <div style="background:${theme.colors['--ink']}"></div>
+        <div style="background:${theme.colors['--ink-brown']}"></div>
+        <div style="background:${theme.colors['--parchment']}"></div>
+        <div style="background:${theme.colors['--ember']}"></div>
+      `;
+      
+      btn.innerHTML = `<span>${theme.name}</span>`;
+      btn.appendChild(cPreview);
+      
+      btn.onclick = () => {
+        document.querySelectorAll('#mapList .btn-select').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentThemeIndex = index;
+        applyTheme(index);
+      };
+      mapList.appendChild(btn);
+    });
+
+    SKINS.forEach((skin, index) => {
+      const btn = document.createElement('button');
+      btn.className = `btn-select ${index === currentSkinIndex ? 'active' : ''}`;
+      btn.innerHTML = `<span class="skin-icon">${skin.icon}</span>`;
+      btn.title = skin.name;
+      
+      btn.onclick = () => {
+        document.querySelectorAll('#skinList .btn-select').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentSkinIndex = index;
+        document.getElementById('dpadCenter').textContent = skin.icon;
+        if(status === 'playing' || status === 'paused') render();
+      };
+      skinList.appendChild(btn);
+    });
+  }
+
+  function applyTheme(index) {
+    const theme = THEMES[index];
+    for (const key in theme.colors) {
+      document.documentElement.style.setProperty(key, theme.colors[key]);
+    }
+  }
+
+  const screens = {
+    start: document.getElementById('screenStart'),
+    custom: document.getElementById('screenCustom'),
+    game: document.getElementById('screenGame')
+  };
+
+  function showScreen(name) {
+    Object.values(screens).forEach(s => s.classList.remove('show'));
+    screens[name].classList.add('show');
+  }
+
+  document.getElementById('btnPlay').onclick = () => {
+    showScreen('game');
+    startNewRun();
+  };
+  
+  document.getElementById('btnCustom').onclick = () => showScreen('custom');
+  document.getElementById('btnBackFromCustom').onclick = () => showScreen('start');
+
+  const LEVELS = [
+    { cols: 5,  rows: 5,  lightMultiplier: 4.5 },  
+    { cols: 7,  rows: 5,  lightMultiplier: 3.8 },  
+    { cols: 9,  rows: 5,  lightMultiplier: 3.2 },  
+    { cols: 11, rows: 7,  lightMultiplier: 2.8 },  
+    { cols: 13, rows: 7,  lightMultiplier: 2.5 },  
+    { cols: 15, rows: 9,  lightMultiplier: 2.2 },  
+    { cols: 17, rows: 9,  lightMultiplier: 1.9 },  
+    { cols: 19, rows: 11, lightMultiplier: 1.7 }   
+  ];
+  const TOTAL_LEVELS = LEVELS.length;
+
+  const grid = document.getElementById('mazeGrid');
+  const glow = document.getElementById('lanternGlow');
+  const overlay = document.getElementById('overlay');
+  const overlayCard = document.getElementById('overlayCard');
+  const overlayTitle = document.getElementById('overlayTitle');
+  const overlayLine1 = document.getElementById('overlayLine1');
+  const overlayLine2 = document.getElementById('overlayLine2');
+  const overlayScore = document.getElementById('overlayScore');
+  const overlayPrimary = document.getElementById('overlayPrimary');
+  const overlayRestartRun = document.getElementById('overlayRestartRun');
+  const overlayBackToStart = document.getElementById('overlayBackToStart');
+  
+  const stepsVal = document.getElementById('stepsVal');
+  const timeVal = document.getElementById('timeVal');
+  const bestVal = document.getElementById('bestVal');
+  const statSteps = document.getElementById('statSteps');
+  const levelNum = document.getElementById('levelNum');
+  const levelTotal = document.getElementById('levelTotal');
+  const levelDots = document.getElementById('levelDots');
+
+  let COLS, ROWS;
+  let maze, player, exitCell, stepsLeft, cellEls, status, timerInterval;
+  let elapsedTime = 0; 
+  let lastTick = 0;
+  let currentLevel = 0;       
+  let totalScore = 0;         
+  let bestScore = null;       
+
+  levelTotal.textContent = TOTAL_LEVELS;
+  buildLevelDots();
+  initCustomization();
+
+  const OPPOSITE = { N:'S', S:'N', E:'W', W:'E' };
+  const DELTA = { N:[0,-1], S:[0,1], E:[1,0], W:[-1,0] };
+
+  function buildLevelDots(){
+    levelDots.innerHTML = '';
+    for(let i=0; i<TOTAL_LEVELS; i++){
+      const dot = document.createElement('span');
+      levelDots.appendChild(dot);
+    }
+  }
+
+  function updateLevelDots(){
+    const dots = levelDots.children;
+    for(let i=0; i<dots.length; i++){
+      dots[i].className = i < currentLevel ? 'done' : (i === currentLevel ? 'current' : '');
+    }
+  }
+
+  function makeGrid(cols, rows){
+    return Array.from({length: rows}, (_, y) =>
+      Array.from({length: cols}, (_, x) => ({
+        x, y, walls: { N:true, S:true, E:true, W:true }, visited:false, seen:false
+      }))
+    );
+  }
+
+  function unvisitedNeighbors(cell, cells){
+    const list = [];
+    for(const dir of ['N','S','E','W']){
+      const [dx,dy] = DELTA[dir];
+      const nx = cell.x+dx, ny = cell.y+dy;
+      if(nx>=0 && nx<COLS && ny>=0 && ny<ROWS && !cells[ny][nx].visited){
+        list.push({cell: cells[ny][nx], dir});
+      }
+    }
+    return list;
+  }
+
+  function generateMaze(){
+    const cells = makeGrid(COLS, ROWS);
+    let current = cells[0][0];
+    current.visited = true;
+    const stack = [current];
+    while(stack.length){
+      current = stack[stack.length-1];
+      const neighbors = unvisitedNeighbors(current, cells);
+      if(neighbors.length){
+        const pick = neighbors[Math.floor(Math.random()*neighbors.length)];
+        current.walls[pick.dir] = false;
+        pick.cell.walls[OPPOSITE[pick.dir]] = false;
+        pick.cell.visited = true;
+        stack.push(pick.cell);
+      } else {
+        stack.pop();
+      }
+    }
+    return cells;
+  }
+
+  function bfsDistances(cells, sx, sy){
+    const dist = Array.from({length: ROWS}, () => Array(COLS).fill(-1));
+    dist[sy][sx] = 0;
+    const queue = [[sx,sy]];
+    while(queue.length){
+      const [x,y] = queue.shift();
+      const cell = cells[y][x];
+      for(const dir of ['N','S','E','W']){
+        if(!cell.walls[dir]){
+          const [dx,dy] = DELTA[dir];
+          const nx = x+dx, ny = y+dy;
+          if(nx>=0 && nx<COLS && ny>=0 && ny<ROWS && dist[ny][nx]===-1){
+            dist[ny][nx] = dist[y][x]+1;
+            queue.push([nx,ny]);
+          }
+        }
+      }
+    }
+    return dist;
+  }
+
+  function buildBoardDOM(){
+    grid.style.gridTemplateColumns = `repeat(${COLS}, var(--cell-size))`;
+    grid.style.gridTemplateRows = `repeat(${ROWS}, var(--cell-size))`;
+    grid.innerHTML = '';
+    cellEls = [];
+    for(let y=0; y<ROWS; y++){
+      for(let x=0; x<COLS; x++){
+        const div = document.createElement('div');
+        div.className = 'cell void';
+        grid.appendChild(div);
+        cellEls.push(div);
+      }
+    }
+  }
+
+  function chebyshev(x1,y1,x2,y2){
+    return Math.max(Math.abs(x1-x2), Math.abs(y1-y2));
+  }
+
+  function markSeen(cx, cy){
+    for(let dy=-1; dy<=1; dy++){
+      for(let dx=-1; dx<=1; dx++){
+        const nx=cx+dx, ny=cy+dy;
+        if(nx>=0 && nx<COLS && ny>=0 && ny<ROWS){
+          maze[ny][nx].seen = true;
+        }
+      }
+    }
+  }
+
+  function render(){
+    const currentIcon = SKINS[currentSkinIndex].icon;
+    
+    for(let y=0; y<ROWS; y++){
+      for(let x=0; x<COLS; x++){
+        const cell = maze[y][x];
+        const el = cellEls[y*COLS + x];
+        const dist = chebyshev(x,y, player.x, player.y);
+        const lit = dist <= 1;
+        const cls = ['cell'];
+        
+        if(lit) cls.push('lit');
+        else if(cell.seen) cls.push('shadow');
+        else cls.push('void');
+
+        if(lit || cell.seen){
+          if(cell.walls.N) cls.push('wN');
+          if(cell.walls.S) cls.push('wS');
+          if(cell.walls.E) cls.push('wE');
+          if(cell.walls.W) cls.push('wW');
+        }
+
+        let icon = '';
+        if(x===player.x && y===player.y){
+          cls.push('player');
+          icon = currentIcon;
+        } else if(x===exitCell.x && y===exitCell.y && (lit || cell.seen)){
+          icon = '★';
+        }
+
+        el.className = cls.join(' ');
+        el.innerHTML = icon ? `<span class="icon">${icon}</span>` : '';
+      }
+    }
+
+    const cellSizePx = cellEls[0].getBoundingClientRect().width;
+    glow.style.left = `${(player.x + 0.5) * cellSizePx}px`;
+    glow.style.top = `${(player.y + 0.5) * cellSizePx}px`;
+
+    stepsVal.textContent = stepsLeft;
+    statSteps.classList.toggle('warn', stepsLeft <= Math.max(4, Math.round((COLS+ROWS)*0.15)));
+  }
+
+  function formatTime(ms){
+    const sec = ms / 1000;
+    const m = Math.floor(sec/60).toString().padStart(2,'0');
+    const s = Math.floor(sec%60).toString().padStart(2,'0');
+    return `${m}:${s}`;
+  }
+
+  function startTimer(){
+    lastTick = Date.now();
+    clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+      if(status === 'playing'){
+        const now = Date.now();
+        elapsedTime += (now - lastTick);
+        lastTick = now;
+        timeVal.textContent = formatTime(elapsedTime);
+      }
+    }, 250);
+  }
+
+  function computeScore(won){
+    if(!won) return 0;
+    const timeBonus = Math.max(0, 400 - Math.floor((elapsedTime/1000)*4));
+    const levelBonus = (currentLevel + 1) * 40;
+    return Math.max(0, stepsLeft*30) + timeBonus + 100 + levelBonus;
+  }
+
+  function showOverlay(kind, {title, line1, line2, score, primaryLabel, showRestartRun}){
+    overlayCard.className = `overlay-card ${kind}`;
+    overlayTitle.textContent = title;
+    overlayLine1.textContent = line1;
+    overlayLine2.textContent = line2;
+    overlayScore.textContent = score;
+    overlayPrimary.textContent = primaryLabel;
+    
+    overlayPrimary.style.display = primaryLabel ? 'inline-block' : 'none';
+    overlayRestartRun.style.display = showRestartRun ? 'inline-block' : 'none';
+    
+    if(kind !== 'pause'){
+        overlayBackToStart.style.display = 'none';
+    }
+    
+    overlay.classList.add('show');
+  }
+
+  function win(){
+    status = 'won';
+    const score = computeScore(true);
+    totalScore += score;
+    const isFinalLevel = currentLevel === TOTAL_LEVELS - 1;
+
+    if(isFinalLevel){
+      if(bestScore === null || totalScore > bestScore){
+        bestScore = totalScore;
+        bestVal.textContent = bestScore;
+      }
+      showOverlay('champion', {
+        title: 'Jornada Completa!',
+        line1: `Você venceu todas as ${TOTAL_LEVELS} fases do labirinto.`,
+        line2: `Tempo nesta fase: ${formatTime(elapsedTime)}`,
+        score: `Pontuação total: ${totalScore}`,
+        primaryLabel: 'Nova Jornada',
+        showRestartRun: false
+      });
+      updateLevelDots();
+    } else {
+      showOverlay('win', {
+        title: `Fase ${currentLevel + 1} Concluída!`,
+        line1: `Luz poupada: ${stepsLeft} passo(s)`,
+        line2: `Pontuação acumulada: ${totalScore}`,
+        score: `+${score} pontos`,
+        primaryLabel: 'Próxima Fase',
+        showRestartRun: true
+      });
+    }
+  }
+
+  function lose(){
+    status = 'lost';
+    if(bestScore === null || totalScore > bestScore){
+      bestScore = totalScore;
+      bestVal.textContent = bestScore;
+    }
+    showOverlay('lose', {
+      title: 'A Luz se Apagou...',
+      line1: `Perdido na Fase ${currentLevel + 1} de ${TOTAL_LEVELS}.`,
+      line2: `Tempo até então: ${formatTime(elapsedTime)}`,
+      score: `Pontuação total: ${totalScore}`,
+      primaryLabel: 'Tentar Novamente',
+      showRestartRun: true
+    });
+  }
+
+  function tryMove(dir){
+    if(status !== 'playing') return;
+    const cell = maze[player.y][player.x];
+    if(cell.walls[dir]) return;
+    const [dx,dy] = DELTA[dir];
+    const nx = player.x+dx, ny = player.y+dy;
+    if(nx<0 || nx>=COLS || ny<0 || ny>=ROWS) return;
+
+    player.x = nx; player.y = ny;
+    stepsLeft--;
+    markSeen(nx, ny);
+    render();
+
+    if(nx === exitCell.x && ny === exitCell.y){ win(); return; }
+    if(stepsLeft <= 0){ lose(); return; }
+  }
+
+  function loadLevel(levelIndex){
+    currentLevel = levelIndex;
+    const cfg = LEVELS[currentLevel];
+    COLS = cfg.cols;
+    ROWS = cfg.rows;
+
+    document.documentElement.style.setProperty('--cols', COLS);
+    document.documentElement.style.setProperty('--rows', ROWS);
+
+    levelNum.textContent = currentLevel + 1;
+    updateLevelDots();
+
+    overlay.classList.remove('show');
+    maze = generateMaze();
+    player = { x:0, y:0 };
+    const dist = bfsDistances(maze, 0, 0);
+
+    let maxDist = -1, candidates = [];
+    for(let y=0; y<ROWS; y++){
+      for(let x=0; x<COLS; x++){
+        if(dist[y][x] > maxDist){ maxDist = dist[y][x]; candidates = [[x,y]]; }
+        else if(dist[y][x] === maxDist){ candidates.push([x,y]); }
+      }
+    }
+    const [ex, ey] = candidates[Math.floor(Math.random()*candidates.length)];
+    exitCell = { x: ex, y: ey };
+
+    stepsLeft = Math.max(8, Math.ceil(maxDist * (cfg.lightMultiplier * 0.65)) + 2);
+    status = 'playing';
+
+    buildBoardDOM();
+    markSeen(0,0);
+    render();
+    
+    elapsedTime = 0;
+    timeVal.textContent = '00:00';
+    startTimer();
+  }
+
+  function startNewRun(){
+    totalScore = 0;
+    loadLevel(0);
+  }
+
+  function goToNextLevelOrRestart(){
+    if(status === 'paused') {
+      status = 'playing';
+      overlay.classList.remove('show');
+      lastTick = Date.now();
+      return;
+    }
+    if(status === 'won'){
+      const isFinalLevel = currentLevel === TOTAL_LEVELS - 1;
+      if(isFinalLevel){
+        startNewRun();
+      } else {
+        loadLevel(currentLevel + 1);
+      }
+    } else if(status === 'lost') {
+      totalScore = Math.max(0, totalScore);
+      loadLevel(currentLevel);
+    }
+  }
+  
+  function handlePause() {
+    if(status === 'playing') {
+        status = 'paused';
+        showOverlay('pause', {
+            title: 'Jogo Pausado',
+            line1: 'Sua lanterna repousa com segurança.',
+            line2: 'Tome fôlego antes de continuar.',
+            score: '',
+            primaryLabel: 'Continuar',
+            showRestartRun: false
+        });
+        overlayBackToStart.style.display = 'inline-block';
+    }
+  }
+
+  document.addEventListener('keydown', (e) => {
+    const map = { ArrowUp:'N', ArrowDown:'S', ArrowLeft:'W', ArrowRight:'E', w:'N', s:'S', a:'W', d:'E', W:'N', S:'S', A:'W', D:'E' };
+    if(map[e.key]){
+      e.preventDefault();
+      tryMove(map[e.key]);
+    } else if(e.key === 'Escape' || e.key === 'p' || e.key === 'P') {
+      handlePause();
+    }
+  });
+
+  document.querySelectorAll('.dpad .pad[data-dir]').forEach(btn => {
+    btn.addEventListener('click', () => tryMove(btn.dataset.dir));
+  });
+
+  document.getElementById('btnPause').addEventListener('click', handlePause);
+  overlayPrimary.addEventListener('click', goToNextLevelOrRestart);
+  overlayRestartRun.addEventListener('click', startNewRun);
+  
+  overlayBackToStart.addEventListener('click', () => {
+    status = 'menu';
+    overlay.classList.remove('show');
+    showScreen('start');
+  });
+
+  window.addEventListener('resize', () => {
+      if(status === 'playing' || status === 'paused') render();
+  });
+
+})();
+</script>
+</body>
+</html>
