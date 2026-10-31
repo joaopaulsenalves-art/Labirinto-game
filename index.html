@@ -475,6 +475,63 @@
   buildLevelDots();
   initCustomization();
 
+  // ---------- PROGRESSO NA NUVEM (Supabase) ----------
+  // Salva a MELHOR PONTUAÇÃO = soma das pontuações de todas as fases de uma jornada.
+  const GAME_ID = 'labirinto';
+  const URL_PROGRESSO = 'https://joaopaulsenalves-art.github.io/Hub-do-Jhows/progress.js';
+  let progresso = null;   // continua null se a nuvem não estiver disponível (o jogo segue normal)
+
+  function montarEstado() {
+    return { schemaVersion: 1, melhorPontuacao: bestScore ?? 0 };
+  }
+
+  function salvarProgresso() {
+    if (progresso) progresso.salvarAgora(GAME_ID, montarEstado());
+  }
+
+  // Aplica o que veio da nuvem. Valida o tipo, porque o dado vem de fora do jogo.
+  function aplicarEstado(estado) {
+    if (!estado || typeof estado !== 'object') return;
+    const m = estado.melhorPontuacao;
+    if (Number.isFinite(m) && m >= 0 && (bestScore === null || m > bestScore)) {
+      bestScore = Math.floor(m);
+      bestVal.textContent = bestScore;
+    }
+  }
+
+  // Chame quando totalScore mudar (fim de fase, derrota ou jornada completa).
+  function registrarMelhor() {
+    if (bestScore === null || totalScore > bestScore) {
+      bestScore = totalScore;
+      bestVal.textContent = bestScore;
+      if (totalScore > 0) salvarProgresso();
+    }
+  }
+
+  async function iniciarProgresso() {
+    try {
+      const m = await import(URL_PROGRESSO);
+      m.indicadorDeStatus();   // aviso no canto da tela: "Salvo na nuvem", etc.
+
+      const salvo = await m.carregar(GAME_ID, {
+        versaoAtual: 1,
+        migrar: (e) => e,   // quando o formato mudar, aumente a versão e converta aqui
+        // Progresso de visitante + progresso da conta: fica o maior
+        aoConflito: (local, nuvem) => ({
+          schemaVersion: 1,
+          melhorPontuacao: Math.max(Number(local?.melhorPontuacao) || 0, Number(nuvem?.melhorPontuacao) || 0)
+        })
+      });
+
+      aplicarEstado(salvo);
+      progresso = m;   // o progress.js já sobe para a conta o que só existia no aparelho
+    } catch (e) {
+      progresso = null;
+      console.warn('Progresso na nuvem indisponível, usando só o aparelho:', e);
+    }
+  }
+  iniciarProgresso();
+
   const OPPOSITE = { N:'S', S:'N', E:'W', W:'E' };
   const DELTA = { N:[0,-1], S:[0,1], E:[1,0], W:[-1,0] };
 
@@ -677,13 +734,10 @@
     status = 'won';
     const score = computeScore(true);
     totalScore += score;
+    registrarMelhor();   // melhor pontuação = soma das fases; salva na nuvem
     const isFinalLevel = currentLevel === TOTAL_LEVELS - 1;
 
     if(isFinalLevel){
-      if(bestScore === null || totalScore > bestScore){
-        bestScore = totalScore;
-        bestVal.textContent = bestScore;
-      }
       showOverlay('champion', {
         title: 'Jornada Completa!',
         line1: `Você venceu todas as ${TOTAL_LEVELS} fases do labirinto.`,
@@ -707,10 +761,7 @@
 
   function lose(){
     status = 'lost';
-    if(bestScore === null || totalScore > bestScore){
-      bestScore = totalScore;
-      bestVal.textContent = bestScore;
-    }
+    registrarMelhor();   // melhor pontuação = soma das fases; salva na nuvem
     showOverlay('lose', {
       title: 'A Luz se Apagou...',
       line1: `Perdido na Fase ${currentLevel + 1} de ${TOTAL_LEVELS}.`,
